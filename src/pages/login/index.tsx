@@ -1,0 +1,102 @@
+import { useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { BrandMark } from "@/components/BrandMark"
+import { api } from "@/services/api"
+import { setAuth } from "@/lib/auth"
+import { applyFieldErrors, getApiErrorMessage } from "@/lib/utils-api"
+import type { User } from "@/types"
+
+const loginSchema = z.object({
+  email: z.string().email("E-mail inválido"),
+  password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres"),
+})
+
+type LoginValues = z.infer<typeof loginSchema>
+
+export function LoginPage() {
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(false)
+
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors },
+  } = useForm<LoginValues>({ resolver: zodResolver(loginSchema) })
+
+  async function onSubmit(values: LoginValues) {
+    try {
+      setLoading(true)
+      const response = await api.post("/login", values)
+      const { token, ...user } = response.data as User & { token: string }
+      setAuth(token, user)
+      toast.success("Login realizado com sucesso!", { position: "top-center" })
+      navigate("/", { replace: true })
+    } catch (error) {
+      const applied = applyFieldErrors(
+        error,
+        { email: "", password: "" },
+        (fieldErrors) => {
+          Object.entries(fieldErrors).forEach(([field, message]) => {
+            if (message) setError(field as keyof LoginValues, { message })
+          })
+        }
+      )
+      if (!applied) {
+        toast.error(getApiErrorMessage(error, "Não foi possível entrar"), { position: "top-center" })
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-linear-to-b from-white to-muted px-4 py-10">
+      <div className="pointer-events-none absolute -top-32 -right-40 size-105 rounded-full bg-accent/70 blur-3xl" />
+      <div className="relative w-full max-w-sm rounded-2xl bg-card p-6 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.2)] ring-1 ring-border sm:p-8">
+        <div className="mb-6 flex flex-col items-center gap-3 text-center">
+          <BrandMark />
+          <p className="text-sm text-muted-foreground">Entre para gerenciar sua barbearia</p>
+        </div>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="email">E-mail</Label>
+            <Input id="email" type="email" placeholder="voce@barbearia.com" {...register("email")} />
+            {errors.email && <span className="text-xs text-destructive">{errors.email.message}</span>}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="password">Senha</Label>
+            <Input id="password" type="password" placeholder="Sua senha" {...register("password")} />
+            {errors.password && <span className="text-xs text-destructive">{errors.password.message}</span>}
+            <Link
+              to="/esqueci-senha"
+              className="self-end text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              Esqueci minha senha
+            </Link>
+          </div>
+
+          <Button type="submit" size="lg" disabled={loading} className="mt-2 w-full">
+            {loading ? "Entrando..." : "Entrar"}
+          </Button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          Ainda não tem uma barbearia cadastrada?{" "}
+          <Link to="/register" className="font-medium text-foreground underline underline-offset-4">
+            Cadastre-se
+          </Link>
+        </p>
+      </div>
+    </div>
+  )
+}
