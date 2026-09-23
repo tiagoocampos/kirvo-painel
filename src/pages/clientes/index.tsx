@@ -218,7 +218,50 @@ export function ClientesPage() {
               className="sm:w-72"
             />
 
-            <div className="rounded-lg border border-border">
+            {/* Mobile (< md): lista de cards — tabela densa não cabe em tela
+                estreita sem scroll lateral. */}
+            <div className="flex flex-col gap-3 md:hidden">
+              {rows.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+                  Nenhum cliente encontrado.
+                </p>
+              ) : (
+                rows.map((row) => {
+                  const customer = row.original
+                  return (
+                    <div key={row.id} className="flex flex-col gap-2 rounded-lg border border-border p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-foreground">{customer.name}</span>
+                          <a href={`tel:${customer.phone}`} className="text-sm text-muted-foreground hover:underline">
+                            {customer.phone}
+                          </a>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => {
+                            setHistoryCustomer(customer)
+                            setHistoryOpen(true)
+                          }}
+                        >
+                          <History className="size-3.5" />
+                          Histórico
+                        </Button>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{customer.appointmentsCount} agendamento(s)</span>
+                        <span>Cliente desde {formatDate(customer.createdAt)}</span>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Desktop/tablet largo (>= md): tabela densa. */}
+            <div className="hidden rounded-lg border border-border md:block">
               <Table>
                 <TableHeader>
                   {table.getHeaderGroups().map((headerGroup) => (

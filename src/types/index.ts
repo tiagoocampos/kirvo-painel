@@ -96,7 +96,6 @@ export interface Appointment {
   professional: { id: string; name: string; photoUrl: string | null }
 }
 
-// GET /customers (pendente)
 export interface Customer {
   id: string
   name: string
@@ -106,7 +105,6 @@ export interface Customer {
   appointmentsCount: number
 }
 
-// GET /dashboard/summary (pendente)
 export interface DashboardTodaySummary {
   appointmentsToday: number
   completedToday: number
@@ -125,9 +123,25 @@ export interface DashboardSummary {
   previousMonth: DashboardMonthSummary
 }
 
-// GET /dashboard/revenue (pendente)
 export interface DashboardRevenuePoint {
   date: string // "YYYY-MM-DD"
   totalRevenue: number
   totalAppointments: number
+}
+
+// Feed de atividade do painel (sino) — separado de PushSubscription: este é
+// o histórico dentro do app, o push é a notificação do sistema operacional.
+export interface AppNotification {
+  id: string
+  type: string // "novo_agendamento" por enquanto, mas é string livre no backend
+  title: string
+  body: string // já vem pronto do backend, não remontar no front
+  appointmentId: string | null
+  read: boolean
+  createdAt: string
+}
+
+export interface NotificationsPage {
+  items: AppNotification[]
+  nextCursor: string | null
 }

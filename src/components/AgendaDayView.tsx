@@ -2,6 +2,9 @@ import { getZonedParts } from "@/lib/dates"
 import { APPOINTMENT_STATUS_BADGE_CLASSNAME, APPOINTMENT_STATUS_LABELS } from "@/lib/appointmentStatus"
 import { formatPrice } from "@/lib/utils-api"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { AppointmentStatusBadge } from "@/components/AppointmentStatusBadge"
+import { RejectAppointmentDialog } from "@/components/RejectAppointmentDialog"
 import type { Appointment, Professional } from "@/types"
 
 const PIXELS_PER_MINUTE = 1.3
@@ -16,6 +19,9 @@ interface AgendaDayViewProps {
   professionals: Professional[]
   appointments: Appointment[]
   onSelect: (appointment: Appointment) => void
+  onConfirm: (appointment: Appointment) => void
+  onReject: (appointment: Appointment, reason?: string) => void
+  updatingId: string | null
 }
 
 function timeToMinutes(time: string): number {
@@ -29,7 +35,16 @@ function minutesToLabel(minutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
 }
 
-export function AgendaDayView({ date, timezone, professionals, appointments, onSelect }: AgendaDayViewProps) {
+export function AgendaDayView({
+  date,
+  timezone,
+  professionals,
+  appointments,
+  onSelect,
+  onConfirm,
+  onReject,
+  updatingId,
+}: AgendaDayViewProps) {
   const weekday = new Date(`${date}T12:00:00Z`).getUTCDay()
 
   // Faixa do dia: cobre o expediente de todo mundo que atende nesse dia da
@@ -75,6 +90,10 @@ export function AgendaDayView({ date, timezone, professionals, appointments, onS
     appointmentsByProfessional.set(appointment.professional.id, list)
   }
 
+  const sortedAppointments = [...appointments].sort(
+    (a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
+  )
+
   if (professionals.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
@@ -84,11 +103,70 @@ export function AgendaDayView({ date, timezone, professionals, appointments, onS
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <div
-        className="grid min-w-[640px]"
-        style={{ gridTemplateColumns: `4.5rem repeat(${professionals.length}, minmax(0, 1fr))` }}
-      >
+    <>
+      {/* Mobile (< md): lista vertical única — a grade multi-coluna força scroll
+          horizontal numa tela de ~375px, então aqui os agendamentos empilham por
+          horário e o nome do profissional vira parte do card, não uma coluna. */}
+      <div className="flex flex-col gap-2 md:hidden">
+        {sortedAppointments.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+            Nenhum agendamento neste dia.
+          </p>
+        ) : (
+          sortedAppointments.map((appointment) => {
+            const { time } = getZonedParts(appointment.scheduledAt, timezone)
+            const isPending = appointment.status === "agendado"
+
+            return (
+              <div
+                key={appointment.id}
+                className={cn(
+                  "flex flex-col gap-2 rounded-lg border border-border p-3",
+                  appointment.status === "cancelado" ? "opacity-60" : ""
+                )}
+              >
+                <button type="button" onClick={() => onSelect(appointment)} className="flex flex-col gap-1 text-left">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-foreground">
+                      {time} · {appointment.customerName}
+                    </span>
+                    <AppointmentStatusBadge status={appointment.status} />
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {appointment.professional.name} · {appointment.service.name}
+                  </span>
+                  <span className="text-xs font-medium text-foreground">{formatPrice(appointment.price)}</span>
+                </button>
+
+                {isPending && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button size="sm" disabled={updatingId === appointment.id} onClick={() => onConfirm(appointment)}>
+                      Confirmar
+                    </Button>
+                    <RejectAppointmentDialog
+                      trigger={
+                        <Button size="sm" variant="destructive" disabled={updatingId === appointment.id}>
+                          Recusar
+                        </Button>
+                      }
+                      customerName={appointment.customerName}
+                      submitting={updatingId === appointment.id}
+                      onReject={(reason) => onReject(appointment, reason)}
+                    />
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {/* Desktop/tablet largo (>= md): grade multi-coluna, uma coluna por profissional. */}
+      <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
+        <div
+          className="grid min-w-[640px]"
+          style={{ gridTemplateColumns: `4.5rem repeat(${professionals.length}, minmax(0, 1fr))` }}
+        >
         <div className="border-b border-r border-border bg-muted/40" />
         {professionals.map((professional) => (
           <div
@@ -157,6 +235,7 @@ export function AgendaDayView({ date, timezone, professionals, appointments, onS
           </div>
         ))}
       </div>
-    </div>
+      </div>
+    </>
   )
 }

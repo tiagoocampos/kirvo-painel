@@ -13,6 +13,8 @@ import {
   Store,
   Download,
   Share,
+  Bell,
+  BellOff,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -34,20 +36,22 @@ import {
 } from "@/components/ui/alert-dialog"
 import { BrandMark } from "@/components/BrandMark"
 import { StoreSettingsSheet } from "@/components/StoreSettingsSheet"
+import { NotificationsSheet } from "@/components/NotificationsSheet"
+import { AppointmentDetailSheet } from "@/components/AppointmentDetailSheet"
 import { clearAuth, getStoredUser, isStoreOwner } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 import { useTenant } from "@/contexts/TenantContext"
 import { useInstallPrompt } from "@/contexts/InstallPromptContext"
+import { usePushNotifications } from "@/hooks/usePushNotifications"
+import { useUnreadNotificationCount } from "@/hooks/useUnreadNotificationCount"
+import { markAllNotificationsRead } from "@/services/notifications"
+import { cancelAppointment, updateAppointmentStatus } from "@/services/appointments"
+import { showApiError } from "@/lib/utils-api"
 import { getPlanLabel } from "@/lib/plan"
-import type { Tenant, User } from "@/types"
+import { isIOS, isStandalone } from "@/lib/pwa"
+import type { Appointment, AppointmentStatus, Tenant, User } from "@/types"
 
 const STOREFRONT_URL = import.meta.env.VITE_STOREFRONT_URL
-
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-
-function isStandalone() {
-  return window.matchMedia("(display-mode: standalone)").matches
-}
 
 const NAV_ITEMS = [
   { to: "/", label: "Painel", icon: LayoutDashboard, end: true, ownerOnly: false },
@@ -120,13 +124,65 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { tenant, setTenant } = useTenant()
   const { canInstall, promptInstall } = useInstallPrompt()
+  const {
+    permission: pushPermission,
+    subscribed: pushSubscribed,
+    loading: pushLoading,
+    subscribe: subscribePush,
+    unsubscribe: unsubscribePush,
+  } = usePushNotifications()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [iosInstallOpen, setIosInstallOpen] = useState(false)
   const [alreadyInstalled] = useState(isStandalone)
+  const [unreadCount, setUnreadCount] = useUnreadNotificationCount(Boolean(user))
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notificationAppointment, setNotificationAppointment] = useState<Appointment | null>(null)
+  const [notificationDetailOpen, setNotificationDetailOpen] = useState(false)
+  const [notificationUpdatingId, setNotificationUpdatingId] = useState<string | null>(null)
 
   useEffect(() => {
     setUser(getStoredUser())
   }, [])
+
+  // Abrir o sheet já limpa o não lido, igual ao comportamento da aba de
+  // atividade do Instagram — zera o badge na hora, sem esperar o próximo
+  // ciclo do polling.
+  function handleNotificationsOpenChange(open: boolean) {
+    setNotificationsOpen(open)
+    if (open && unreadCount > 0) {
+      setUnreadCount(0)
+      markAllNotificationsRead().catch(() => {
+        // Best-effort: o badge já foi zerado localmente; na pior hipótese o
+        // próximo polling devolve a contagem real de novo.
+      })
+    }
+  }
+
+  async function handleNotificationChangeStatus(status: AppointmentStatus) {
+    if (!notificationAppointment) return
+    try {
+      setNotificationUpdatingId(notificationAppointment.id)
+      const response = await updateAppointmentStatus(notificationAppointment.id, status)
+      setNotificationAppointment(response.data)
+    } catch (error) {
+      showApiError(error, "Erro ao atualizar o agendamento")
+    } finally {
+      setNotificationUpdatingId(null)
+    }
+  }
+
+  async function handleNotificationCancel(reason?: string) {
+    if (!notificationAppointment) return
+    try {
+      setNotificationUpdatingId(notificationAppointment.id)
+      const response = await cancelAppointment(notificationAppointment.id, reason)
+      setNotificationAppointment(response.data)
+    } catch (error) {
+      showApiError(error, "Erro ao cancelar o agendamento")
+    } finally {
+      setNotificationUpdatingId(null)
+    }
+  }
 
   function handleLogout() {
     clearAuth()
@@ -179,7 +235,50 @@ export function AppLayout({ children }: { children: ReactNode }) {
             Instalar app
           </Button>
         )}
+        {pushPermission === "unsupported" ? (
+          isIOS &&
+          !alreadyInstalled && (
+            <Button variant="outline" className="justify-start gap-2" onClick={() => setIosInstallOpen(true)}>
+              <Bell className="size-4" />
+              Ativar notificações
+            </Button>
+          )
+        ) : pushPermission === "denied" ? (
+          <Button variant="outline" className="justify-start gap-2" disabled>
+            <BellOff className="size-4" />
+            Notificações bloqueadas
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            className="justify-start gap-2"
+            disabled={pushLoading}
+            onClick={pushSubscribed ? unsubscribePush : subscribePush}
+          >
+            {pushSubscribed ? <BellOff className="size-4" /> : <Bell className="size-4" />}
+            {pushSubscribed ? "Desativar notificações" : "Ativar notificações"}
+          </Button>
+        )}
       </div>
+    )
+  }
+
+  function NotificationBell() {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="relative"
+        aria-label="Notificações"
+        onClick={() => handleNotificationsOpenChange(true)}
+      >
+        <Bell className="size-4" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-white">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </Button>
     )
   }
 
@@ -187,8 +286,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-muted">
       <div className="flex">
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col gap-6 border-r border-border bg-card p-4 md:flex">
-          <div className="flex items-center gap-2 px-1 pt-1">
+          <div className="flex items-center justify-between gap-2 px-1 pt-1">
             <BrandMark />
+            {user && <NotificationBell />}
           </div>
           <NavLinks user={user} />
           <div className="mt-auto flex flex-col gap-3">
@@ -209,33 +309,36 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card/95 px-4 py-3 backdrop-blur-sm md:hidden">
             <BrandMark />
-            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <Menu className="size-4" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-64">
-                <SheetHeader>
-                  <SheetTitle className="sr-only">KirvoAgenda</SheetTitle>
-                  <BrandMark />
-                </SheetHeader>
-                <div className="flex flex-col gap-6 px-4 pb-4">
-                  <NavLinks user={user} onNavigate={() => setMobileOpen(false)} />
-                  <StoreActions />
-                  {user && (
-                    <div className="flex flex-col gap-1.5 rounded-lg bg-muted p-3">
-                      <p className="truncate text-sm font-medium text-foreground">{user.name}</p>
-                      <RoleBadge user={user} />
-                    </div>
-                  )}
-                  <Button variant="outline" onClick={handleLogout} className="justify-start gap-2">
-                    <LogOut className="size-4" />
-                    Sair
+            <div className="flex items-center gap-1">
+              {user && <NotificationBell />}
+              <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <Menu className="size-4" />
                   </Button>
-                </div>
-              </SheetContent>
-            </Sheet>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-64">
+                  <SheetHeader>
+                    <SheetTitle className="sr-only">KirvoAgenda</SheetTitle>
+                    <BrandMark />
+                  </SheetHeader>
+                  <div className="flex flex-col gap-6 px-4 pb-4">
+                    <NavLinks user={user} onNavigate={() => setMobileOpen(false)} />
+                    <StoreActions />
+                    {user && (
+                      <div className="flex flex-col gap-1.5 rounded-lg bg-muted p-3">
+                        <p className="truncate text-sm font-medium text-foreground">{user.name}</p>
+                        <RoleBadge user={user} />
+                      </div>
+                    )}
+                    <Button variant="outline" onClick={handleLogout} className="justify-start gap-2">
+                      <LogOut className="size-4" />
+                      Sair
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
           </header>
 
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
@@ -247,6 +350,25 @@ export function AppLayout({ children }: { children: ReactNode }) {
         onOpenChange={setSettingsOpen}
         tenant={tenant}
         onSaved={setTenant}
+      />
+
+      <NotificationsSheet
+        open={notificationsOpen}
+        onOpenChange={handleNotificationsOpenChange}
+        onSelectAppointment={(appointment) => {
+          setNotificationAppointment(appointment)
+          setNotificationDetailOpen(true)
+        }}
+      />
+
+      <AppointmentDetailSheet
+        appointment={notificationAppointment}
+        timezone={tenant?.timezone ?? "America/Sao_Paulo"}
+        open={notificationDetailOpen}
+        onOpenChange={setNotificationDetailOpen}
+        updating={notificationUpdatingId === notificationAppointment?.id}
+        onChangeStatus={handleNotificationChangeStatus}
+        onCancel={handleNotificationCancel}
       />
 
       <AlertDialog open={iosInstallOpen} onOpenChange={setIosInstallOpen}>

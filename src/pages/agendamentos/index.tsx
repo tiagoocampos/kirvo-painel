@@ -191,10 +191,13 @@ export function AgendamentosPage() {
             timezone={timezone}
             professionals={visibleProfessionals}
             appointments={appointments}
+            updatingId={updatingId}
             onSelect={(appointment) => {
               setSelected(appointment)
               setDetailOpen(true)
             }}
+            onConfirm={(appointment) => handleChangeStatus(appointment, "confirmado")}
+            onReject={(appointment, reason) => handleCancel(appointment, reason)}
           />
         )}
       </div>

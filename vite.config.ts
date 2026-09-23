@@ -10,10 +10,16 @@ export default defineConfig({
     react(),
     tailwindcss(),
     // Manifest estático: diferente do storefront, o painel é sempre o mesmo
-    // app (identidade do KirvoAgenda), não personalizado por tenant — então
-    // não precisa do injectManifest/sw.ts customizado, generateSW basta.
+    // app (identidade do KirvoAgenda), não personalizado por tenant. Mas,
+    // diferente do que a primeira versão deste setup assumia, push notification
+    // exige listeners de "push"/"notificationclick" num service worker próprio
+    // — o generateSW automático do plugin não permite injetar isso, por isso
+    // injectManifest com src/sw.ts (mesmo padrão do storefront).
     VitePWA({
       registerType: "autoUpdate",
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       manifest: {
         name: "Painel KirvoAgenda",
         short_name: "KirvoAgenda",

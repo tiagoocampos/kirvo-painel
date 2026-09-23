@@ -5,6 +5,12 @@ export function listAppointments(params: { date?: string; professionalId?: strin
   return api.get<Appointment[]>("/appointments", { params })
 }
 
+// Usado quando só se tem o appointmentId (ex: item do feed de notificações),
+// sem os dados completos do agendamento pra abrir o AppointmentDetailSheet.
+export function getAppointment(id: string) {
+  return api.get<Appointment>(`/appointments/${id}`)
+}
+
 export function updateAppointmentStatus(id: string, status: AppointmentStatus) {
   return api.patch<Appointment>(`/appointments/${id}/status`, { status })
 }

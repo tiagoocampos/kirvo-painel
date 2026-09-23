@@ -56,3 +56,24 @@ export function formatLongDate(date: string): string {
     toUtcNoon(date)
   )
 }
+
+// "agora" / "há 5 min" / "há 2h" / "ontem" / "há 3 dias" — pro feed de
+// notificações. Função própria simples em vez de puxar date-fns só pra isso.
+export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+  const then = new Date(iso)
+  const diffSec = Math.floor((now.getTime() - then.getTime()) / 1000)
+
+  if (diffSec < 60) return "agora"
+
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `há ${diffMin} min`
+
+  const diffHour = Math.floor(diffMin / 60)
+  if (diffHour < 24) return `há ${diffHour}h`
+
+  const diffDay = Math.floor(diffHour / 24)
+  if (diffDay === 1) return "ontem"
+  if (diffDay < 7) return `há ${diffDay} dias`
+
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(then)
+}

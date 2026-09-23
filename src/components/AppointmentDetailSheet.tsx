@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { RejectAppointmentDialog } from "@/components/RejectAppointmentDialog"
 import { AppointmentStatusBadge } from "@/components/AppointmentStatusBadge"
 import { formatPrice } from "@/lib/utils-api"
 import { formatLongDate, getZonedParts } from "@/lib/dates"
@@ -109,7 +110,7 @@ export function AppointmentDetailSheet({
             </div>
           )}
 
-          {canCancel && (
+          {canCancel && appointment.status !== "agendado" && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="cancelReason">Motivo do cancelamento (opcional)</Label>
               <Textarea
@@ -125,37 +126,74 @@ export function AppointmentDetailSheet({
 
         {(nextAction || canNoShow || canCancel) && (
           <SheetFooter className="flex-col gap-2">
-            {nextAction && (
-              <Button disabled={updating} onClick={() => onChangeStatus(nextAction.status)} className="w-full">
-                {nextAction.label}
-              </Button>
-            )}
-            {canNoShow && (
-              <ConfirmDialog
-                trigger={
-                  <Button variant="outline" disabled={updating} className="w-full">
-                    Marcar não compareceu
+            {appointment.status === "agendado" ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  {nextAction && (
+                    <Button disabled={updating} onClick={() => onChangeStatus(nextAction.status)}>
+                      {nextAction.label}
+                    </Button>
+                  )}
+                  <RejectAppointmentDialog
+                    trigger={
+                      <Button variant="destructive" disabled={updating}>
+                        Recusar
+                      </Button>
+                    }
+                    customerName={appointment.customerName}
+                    submitting={updating}
+                    onReject={(reason) => onCancel(reason)}
+                  />
+                </div>
+                {canNoShow && (
+                  <ConfirmDialog
+                    trigger={
+                      <Button variant="outline" disabled={updating} className="w-full">
+                        Marcar não compareceu
+                      </Button>
+                    }
+                    title="Marcar como não compareceu?"
+                    description={`O agendamento de ${appointment.customerName} será marcado como "não compareceu".`}
+                    confirmText="Marcar"
+                    onConfirm={() => onChangeStatus("nao_compareceu")}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                {nextAction && (
+                  <Button disabled={updating} onClick={() => onChangeStatus(nextAction.status)} className="w-full">
+                    {nextAction.label}
                   </Button>
-                }
-                title="Marcar como não compareceu?"
-                description={`O agendamento de ${appointment.customerName} será marcado como "não compareceu".`}
-                confirmText="Marcar"
-                onConfirm={() => onChangeStatus("nao_compareceu")}
-              />
-            )}
-            {canCancel && (
-              <ConfirmDialog
-                trigger={
-                  <Button variant="destructive" disabled={updating} className="w-full">
-                    Cancelar agendamento
-                  </Button>
-                }
-                title="Cancelar agendamento?"
-                description={`O agendamento de ${appointment.customerName} será marcado como cancelado. Essa ação não pode ser desfeita.`}
-                confirmText="Cancelar agendamento"
-                destructive
-                onConfirm={() => onCancel(cancelReason.trim() || undefined)}
-              />
+                )}
+                {canNoShow && (
+                  <ConfirmDialog
+                    trigger={
+                      <Button variant="outline" disabled={updating} className="w-full">
+                        Marcar não compareceu
+                      </Button>
+                    }
+                    title="Marcar como não compareceu?"
+                    description={`O agendamento de ${appointment.customerName} será marcado como "não compareceu".`}
+                    confirmText="Marcar"
+                    onConfirm={() => onChangeStatus("nao_compareceu")}
+                  />
+                )}
+                {canCancel && (
+                  <ConfirmDialog
+                    trigger={
+                      <Button variant="destructive" disabled={updating} className="w-full">
+                        Cancelar agendamento
+                      </Button>
+                    }
+                    title="Cancelar agendamento?"
+                    description={`O agendamento de ${appointment.customerName} será marcado como cancelado. Essa ação não pode ser desfeita.`}
+                    confirmText="Cancelar agendamento"
+                    destructive
+                    onConfirm={() => onCancel(cancelReason.trim() || undefined)}
+                  />
+                )}
+              </>
             )}
           </SheetFooter>
         )}

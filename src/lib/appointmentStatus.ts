@@ -17,7 +17,7 @@ export const APPOINTMENT_STATUS_BADGE_CLASSNAME: Record<AppointmentStatus, strin
 }
 
 const NEXT_STATUS_ACTION: Partial<Record<AppointmentStatus, { label: string; status: AppointmentStatus }>> = {
-  agendado: { label: "Confirmar", status: "confirmado" },
+  agendado: { label: "Marcar como visto", status: "confirmado" },
   confirmado: { label: "Marcar como concluído", status: "concluido" },
 }
 
