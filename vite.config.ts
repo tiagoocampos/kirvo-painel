@@ -20,6 +20,14 @@ export default defineConfig({
       strategies: "injectManifest",
       srcDir: "src",
       filename: "sw.ts",
+      // Por padrão o plugin só registra o service worker em build de produção
+      // (vite build/preview) — sem isso, `npm run dev` nunca tem SW ativo, e
+      // toda a parte de push (que depende de `navigator.serviceWorker.ready`)
+      // falha silenciosamente/trava em dev.
+      devOptions: {
+        enabled: true,
+        type: "module",
+      },
       manifest: {
         name: "Painel KirvoAgenda",
         short_name: "KirvoAgenda",
