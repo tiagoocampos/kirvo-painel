@@ -10,9 +10,9 @@ export interface PushSubscriptionInput {
 }
 
 export function subscribeToPush(subscription: PushSubscriptionInput) {
-  return api.post("/push/subscriptions", subscription)
+  return api.post("/push/subscription", subscription)
 }
 
 export function unsubscribeFromPush(endpoint: string) {
-  return api.delete("/push/subscriptions", { data: { endpoint } })
+  return api.delete("/push/subscription", { data: { endpoint } })
 }

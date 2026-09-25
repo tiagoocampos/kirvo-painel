@@ -65,6 +65,7 @@ export function usePushNotifications(): UsePushNotificationsResult {
       toast.error(getApiErrorMessage(error, "Não foi possível ativar as notificações"), {
         position: "top-center",
       })
+      console.log("Erro ao ativar notificações push:", error)
     } finally {
       setLoading(false)
     }
